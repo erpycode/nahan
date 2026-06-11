@@ -2780,22 +2780,79 @@ function getDashboardUI(hasDB) {
                                   </select>
                               </div>
                               <div class="space-y-1">
-                                  <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 ms-1" data-i18n="lbl_port">Data Port (Multi-Select)</label>
-                                  <select id="cfg-port" multiple class="w-full h-32 px-4 py-3 rounded-xl border border-slate-200 dark:border-darkborder bg-slate-50 dark:bg-slate-800 focus:border-primary focus:ring-1 outline-none text-sm font-mono">
-                                      <option value="443" selected>443 (Secure TLS)</option>
-                                      <option value="2053">2053 (Secure TLS)</option>
-                                      <option value="2083">2083 (Secure TLS)</option>
-                                      <option value="2087">2087 (Secure TLS)</option>
-                                      <option value="2096">2096 (Secure TLS)</option>
-                                      <option value="8443">8443 (Secure TLS)</option>
-                                      <option value="80">80 (Standard)</option>
-                                      <option value="8080">8080 (Alt Standard)</option>
-                                      <option value="8880">8880 (Alt Standard)</option>
-                                      <option value="2052">2052 (Alt Standard)</option>
-                                      <option value="2082">2082 (Alt Standard)</option>
-                                      <option value="2086">2086 (Alt Standard)</option>
-                                      <option value="2095">2095 (Alt Standard)</option>
-                                  </select>
+                                  <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 ms-1" data-i18n="lbl_port">Data Port (Select Ports)</label>
+                                  <div id="cfg-port" class="space-y-3 p-4 rounded-xl border border-slate-200 dark:border-darkborder bg-slate-50 dark:bg-slate-800">
+                                      <!-- Secure TLS Ports -->
+                                      <div class="space-y-2">
+                                          <div class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                                              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                              🔒 Secure TLS Ports
+                                          </div>
+                                          <div class="grid grid-cols-2 gap-2 ms-1">
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="443" checked class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">443</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2053" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2053</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2083" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2083</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2087" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2087</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2096" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2096</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="8443" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-emerald-500 focus:ring-emerald-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">8443</span>
+                                              </label>
+                                          </div>
+                                      </div>
+                                      <!-- Standard HTTP Ports -->
+                                      <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-darkborder/50">
+                                          <div class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                                              <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                              🌐 Standard HTTP Ports
+                                          </div>
+                                          <div class="grid grid-cols-2 gap-2 ms-1">
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="80" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">80</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="8080" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">8080</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="8880" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">8880</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2052" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2052</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2082" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2082</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2086" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2086</span>
+                                              </label>
+                                              <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-all">
+                                                  <input type="checkbox" value="2095" class="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-500">
+                                                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">2095</span>
+                                              </label>
+                                          </div>
+                                      </div>
+                                  </div>
                               </div>
                               <div class="space-y-1 md:col-span-2">
                                   <div class="flex justify-between items-center">
@@ -3451,8 +3508,7 @@ function getDashboardUI(hasDB) {
   
           function updateUI() {
               try {
-                  let portsStr = Array.from(document.getElementById('cfg-port').selectedOptions).map(o=>o.value).join(',');
-                  let port = portsStr ? portsStr.split(',')[0] : '443';
+                      let portsStr = Array.from(document.querySelectorAll('#cfg-port input[type="checkbox"]:checked')).map(o=>o.value).join(',');
                   let proto = document.getElementById('cfg-proto').value === 'beta' ? String.fromCharCode(116, 114, 111, 106, 97, 110) : String.fromCharCode(118, 108, 101, 115, 115);
                   let rawIps = document.getElementById('cfg-ips').value || "";
                   
@@ -3489,7 +3545,7 @@ function getDashboardUI(hasDB) {
           function exportConfig() {
               const el = id => document.getElementById(id);
               const payload = {
-                  mode: el('cfg-proto').value, socketPorts: Array.from(el('cfg-port').selectedOptions).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
+                  mode: el('cfg-proto').value, socketPorts: Array.from(el('cfg-port').querySelectorAll('input[type="checkbox"]:checked')).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
                   apiRoute: el('cfg-path').value, masterKey: el('cfg-pass').value, agent: el('cfg-fp').value,
                   resolveIp: el('cfg-dns').value, customDns: el('cfg-custom-dns').value ? el('cfg-custom-dns').value : 'https://cloudflare-dns.com/dns-query', cleanIps: el('cfg-ips').value, maintenanceHost: el('cfg-fake').value, backupRelay: el('cfg-relay').value,
                   enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
@@ -3520,7 +3576,9 @@ function getDashboardUI(hasDB) {
                       const mapId = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
                       mapId('cfg-proto', conf.mode);
                       let pList = (conf.socketPorts || conf.socketPort || '443').split(',');
-                      Array.from(document.getElementById('cfg-port').options).forEach(o => o.selected = pList.includes(o.value));
+                      document.querySelectorAll('#cfg-port input[type="checkbox"]').forEach(o => {
+                          o.checked = pList.includes(o.value);
+                      });
                       mapId('cfg-uuid', conf.deviceId);
                       mapId('cfg-path', conf.apiRoute);
                       mapId('cfg-pass', conf.masterKey);
@@ -3611,7 +3669,9 @@ function getDashboardUI(hasDB) {
                       const conf = data.config;
                       document.getElementById('cfg-proto').value = conf.mode || 'alpha';
                       let pList = (conf.socketPorts || conf.socketPort || '443').split(',');
-                      Array.from(document.getElementById('cfg-port').options).forEach(o => o.selected = pList.includes(o.value));
+                      document.querySelectorAll('#cfg-port input[type="checkbox"]').forEach(o => {
+                          o.checked = pList.includes(o.value);
+                      });
                       document.getElementById('cfg-uuid').value = conf.deviceId || '';
                       document.getElementById('cfg-path').value = conf.apiRoute || '';
                       document.getElementById('cfg-pass').value = conf.masterKey || '';
@@ -3731,7 +3791,7 @@ function getDashboardUI(hasDB) {
               const payload = {
                   key: sessionKey,
                   config: {
-                      mode: el('cfg-proto').value, socketPorts: Array.from(el('cfg-port').selectedOptions).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
+                      mode: el('cfg-proto').value, socketPorts: Array.from(document.querySelectorAll('#cfg-port input[type="checkbox"]:checked')).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
                       apiRoute: el('cfg-path').value, masterKey: el('cfg-pass').value, agent: el('cfg-fp').value,
                       resolveIp: el('cfg-dns').value, customDns: el('cfg-custom-dns').value ? el('cfg-custom-dns').value : 'https://cloudflare-dns.com/dns-query', cleanIps: el('cfg-ips').value, slaveNodes: el('cfg-nodes').value, maintenanceHost: el('cfg-fake').value, backupRelay: el('cfg-relay').value,
                       enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
@@ -3773,10 +3833,7 @@ function getDashboardUI(hasDB) {
               const payload = {
                   key: sessionKey,
                   config: {
-                      mode: el('cfg-proto').value, socketPorts: Array.from(el('cfg-port').selectedOptions).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
-                      apiRoute: el('cfg-path').value, masterKey: el('cfg-pass').value, agent: el('cfg-fp').value,
-                      resolveIp: el('cfg-dns').value, customDns: el('cfg-custom-dns').value ? el('cfg-custom-dns').value : 'https://cloudflare-dns.com/dns-query', cleanIps: el('cfg-ips').value, slaveNodes: el('cfg-nodes').value, maintenanceHost: el('cfg-fake').value, backupRelay: el('cfg-relay').value,
-                      enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
+                          mode: el('cfg-proto').value, socketPorts: Array.from(document.querySelectorAll('#cfg-port input[type="checkbox"]:checked')).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
                       tgToken: el('cfg-tg-token').value, tgChatId: el('cfg-tg-chat').value,
                       cfAccountId: el('cfg-cf-acc').value, cfApiToken: el('cfg-cf-token').value,
                       isPaused: el('cfg-pause').checked, silentAlerts: el('cfg-silent').checked,
