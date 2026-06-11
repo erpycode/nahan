@@ -264,12 +264,52 @@ export default {
                             headers: { "Content-Type": "application/json; charset=utf-8" }
                         });
                     }
+                    const REQ_PER_GB = 6000;
 
+                    const usageKey = targetUser?.id
+                        ? targetUser.id.replace(/-/g, '').toLowerCase()
+                        : null;
+
+                    const userUsage = usageKey
+                        ? sysUsageCache?.users?.[usageKey]
+                        : null;
+
+                    const usedReqs = userUsage?.reqs || 0;
+                    const totalReqs = targetUser?.limitTotalReq || 0;
+
+                    const usedBytes = Math.floor(
+                        (usedReqs / REQ_PER_GB) * 1024 * 1024 * 1024
+                    );
+
+                    const totalBytes = totalReqs > 0
+                        ? Math.floor(
+                            (totalReqs / REQ_PER_GB) * 1024 * 1024 * 1024
+                        )
+                        : 1125899906842624;
+
+                    const expireUnix = targetUser?.expiryMs
+                        ? Math.floor(targetUser.expiryMs / 1000)
+                        : 2147483647;
+
+                    const subHeaders = {
+                        "Content-Type": "text/plain; charset=utf-8",
+
+                        "Subscription-Userinfo":
+                            `upload=0; download=${usedBytes}; total=${totalBytes}; expire=${expireUnix}`,
+
+                        "profile-title":
+                            `${targetUser?.name || "User"}`,
+
+                        "Content-Disposition":
+                            `attachment; filename="${targetUser?.name || "User"}"`,
+
+                        "profile-update-interval": "24"
+                    };
                     if (ua.includes(getGamma()) || ua.includes("meta") || ua.includes("sta" + "sh")) {
-                        return new Response(buildYamlProfile(clientHost, targetSub));
+                        return new Response(buildYamlProfile(clientHost, targetSub),{headers: subHeaders});
                     } else {
                         const raw = buildUriProfile(clientHost, targetSub);
-                        return new Response(btoa(raw));
+                        return new Response(btoa(raw), { headers: subHeaders });
                     }
                 }
             }
@@ -1411,8 +1451,14 @@ async function processTelemetryStream(env, ctx) {
 
 async function startDataPipe(webSocket, env, ctx) {
     activeConnections++;
-    webSocket.addEventListener('close', () => activeConnections--);
-    webSocket.addEventListener('error', () => activeConnections--);
+    let closed = false;
+    const releaseClient = () => {
+        if (closed) return;
+        closed = true;
+        activeConnections--;
+    };
+    webSocket.addEventListener('close', releaseClient);
+    webSocket.addEventListener('error', releaseClient);
     let remoteSocket, dataWriter, isInit = true, queue = Promise.resolve();
     let activeClientHash = null;
     webSocket.addEventListener("message", (event) => {
@@ -1442,6 +1488,7 @@ async function startDataPipe(webSocket, env, ctx) {
             if (!validUUIDs.includes(clientHash)) return false; // DROP IF INVALID PROFILE
             
             activeClientHash = clientHash;
+            const userObj = sysConfig.users?.find(u => u.id.replace(/-/g, '').toLowerCase() === activeClientHash);
             trackUsage(activeClientHash, 0, env, ctx);
             
             let uTrack = uuidUsage.get(clientHash) || { connects: 0, last: 0 };
@@ -1468,6 +1515,7 @@ async function startDataPipe(webSocket, env, ctx) {
             if (!validProfile) return false;
             
             activeClientHash = validProfile.id.replace(/-/g, '').toLowerCase();
+            const userObj = sysConfig.users?.find(u => u.id.replace(/-/g, '').toLowerCase() === activeClientHash);
             trackUsage(activeClientHash, 0, env, ctx);
             let uTrack = uuidUsage.get(activeClientHash) || { connects: 0, last: 0 };
             uTrack.connects++;
@@ -3206,7 +3254,7 @@ function getDashboardUI(hasDB) {
                   tbl_name: "Name", tbl_uuid: "UUID", tbl_traffic: "Traffic (Used / Limit)", tbl_exp: "Expiration", tbl_action: "Action", no_users: "No users found. Create one above.",
                   modal_add_title: "Add New User", lbl_u_name: "Name (Required)", lbl_u_gb: "Traffic Limit (GB) - Optional", lbl_u_days: "Duration (Days) - Optional", btn_cancel: "Cancel", btn_confirm: "Add User",
                   limit_total: "Total Requests Limit (Leave empty for unlimited)", limit_daily: "Daily Requests Limit (Leave empty for unlimited)",
-                  limit_days: "Expiration limit (Days) - Leave empty for unlimited", edit_sub: "Edit Subscriber", lbl_name_ph: "Name or UUID",
+                  limit_days: "Expiration limit (Days) - Leave empty for unlimited", limit_devices: "Device Limit (Leave empty for unlimited)", edit_sub: "Edit Subscriber", lbl_name_ph: "Name or UUID",
                   btn_save_changes: "Save Changes", save_btn_user: "Save User", status_active: "Active", status_paused: "Paused", status_expired: "Expired",
                   stat_total_subscribers: "Total Subscribers", stat_active_paused: "Active / Paused", stat_cumulative_traffic: "Cumulative Traffic",
                   sub_directory_title: "Subscriber Directory", sub_directory_desc: "Search, modify bounds, toggle traffic limits or clear billing sessions.", user_search_placeholder: "🔍 Find by Name or UUID...",
@@ -3244,7 +3292,7 @@ function getDashboardUI(hasDB) {
                   lbl_doh: "تحلیل‌گر تخصصی آدرس‌یابی عددی", lbl_strategy: "روش نام‌گذاری کانفیگ‌ها", lbl_prefix: "پیشوند نام کانفیگ‌ها",
                   slave_title: "سایر نودهای موازی", slave_desc: "آدرس دامنه سایر ورکرها را وارد نمایید (هر خط یک آدرس). نود اصلی تنظیمات و مشترکین را به صورت خودکار با آن‌ها هماهنگ می‌کند!",
                   force_sync: "همگام‌سازی اجباری نودها", limit_total: "محدودیت تعداد کل درخواست‌ها (برای نامحدود خالی بگذارید)", limit_daily: "محدودیت درخواست‌های روزانه (برای نامحدود خالی بگذارید)",
-                  limit_days: "مدت زمان اعتبار قانونی (روز) - برای نامحدود خالی بگذارید", edit_sub: "ویرایش مشترک", lbl_name_ph: "نام یا شناسه یکتا",
+                  limit_days: "مدت زمان اعتبار قانونی (روز) - برای نامحدود خالی بگذارید", limit_devices: "محدودیت دستگاه (برای نامحدود خالی بگذارید)", edit_sub: "ویرایش مشترک", lbl_name_ph: "نام یا شناسه یکتا",
                   btn_save_changes: "ذخیره تغییرات", save_btn_user: "ثبت کاربر جدید", status_active: "فعال", status_paused: "متوقف شده", status_expired: "منقضی شده",
                   export_btn: "📥 برون‌بری فایل پیکربندی (نسخه پشتیبان)", import_btn: "📤 درون‌ریزی فایل پیکربندی (نسخه پشتیبان)",
                   stat_total_subscribers: "کل مشترکین", stat_active_paused: "فعال / متوقف شده", stat_cumulative_traffic: "ترافیک کل انباشته",
@@ -3856,7 +3904,7 @@ function getDashboardUI(hasDB) {
                       <td class="px-4 py-4 text-slate-600 dark:text-slate-400 font-mono">
                           <div class="flex flex-col gap-1">
                               <span class="font-bold text-xs flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>\${totalLabel} \${userReqs} \${rLabel} (\${(userReqs/6000).toFixed(2)} GB) / \${u.limitTotalReq ? (u.limitTotalReq + ' ' + rLabel + ' (' + (u.limitTotalReq/6000).toFixed(2) + ' GB)') : \`\${unlimitedTxt}\`} (\${perT})</span>
-                              <span class="text-[11px] opacity-70 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>\${dailyLabel} \${userDReqs} \${rLabel} (\dots) / \${u.limitDailyReq ? (u.limitDailyReq + ' ' + rLabel + ' (' + (u.limitDailyReq/6000).toFixed(2) + ' GB)') : \`\${unlimitedTxt}\`} (\${perD})</span>
+                              <span class="text-[11px] opacity-70 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>\${dailyLabel} \${userDReqs} \${rLabel} / \${u.limitDailyReq ? (u.limitDailyReq + ' ' + rLabel + ' (' + (u.limitDailyReq/6000).toFixed(2) + ' GB)') : \`\${unlimitedTxt}\`} (\${perD})</span>
                           </div>
                       </td>
                       <td class="px-4 py-4 text-slate-600 dark:text-slate-400">\${expTxt}</td>
