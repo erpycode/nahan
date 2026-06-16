@@ -1154,17 +1154,10 @@ async function handleUpdateApi(request, env, ctx) {
                 return new Response(JSON.stringify({ success: false, error: "Could not fetch remote version" }), { status: 502, headers: { "Content-Type": "application/json" } });
             }
             const hasCredentials = !!(accountId && apiToken && workerName);
-            let rollbackAvailable = false;
-            if (env.IOT_DB) {
-                try {
-                    const stored = await d1Get(env, "sys_update_rollback");
-                    if (stored) { const r = JSON.parse(stored); rollbackAvailable = !!r.version; }
-                } catch(e) {}
-            }
             return new Response(JSON.stringify({
                 success: true, current: CURRENT_VERSION, latest: remoteVer,
                 updateAvailable: cmpVersions(CURRENT_VERSION, remoteVer) < 0,
-                canDeploy: hasCredentials, rollbackAvailable
+                canDeploy: hasCredentials
             }), { headers: { "Content-Type": "application/json" } });
         }
 
@@ -1191,35 +1184,6 @@ async function handleUpdateApi(request, env, ctx) {
                 return new Response(JSON.stringify({ success: false, error: "Remote version is not newer" }), { status: 400, headers: { "Content-Type": "application/json" } });
             }
 
-            if (env.IOT_DB) {
-                try {
-                    let currentCode = null;
-                    try {
-                        const codeRes = await fetch(
-                            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
-                            { headers: { "Authorization": `Bearer ${apiToken}` } }
-                        );
-                        if (codeRes.ok) {
-                            const rawText = await codeRes.text();
-                            const ct = codeRes.headers.get("content-type") || "";
-                            if (ct.includes("json")) {
-                                try {
-                                    const json = JSON.parse(rawText);
-                                    currentCode = typeof json.result === "string" ? json.result : (typeof json.result?.script === "string" ? json.result.script : rawText);
-                                } catch(e) { currentCode = rawText; }
-                            } else {
-                                currentCode = rawText;
-                            }
-                        }
-                    } catch(e) {}
-                    if (currentCode) {
-                        await d1Put(env, "sys_update_rollback", JSON.stringify({
-                            version: CURRENT_VERSION, timestamp: Date.now(), workerName, code: currentCode
-                        }));
-                    }
-                } catch(e) {}
-            }
-
             const deployRes = await deployWorkerToCloudflare(accountId, apiToken, workerName, latestCode);
             const deployResult = await deployRes.json();
 
@@ -1234,39 +1198,6 @@ async function handleUpdateApi(request, env, ctx) {
                     }).catch(()=>{}));
                 }
                 return new Response(JSON.stringify({ success: true, message: `Updated to v${newVersion}`, newVersion }), { headers: { "Content-Type": "application/json" } });
-            } else {
-                const errMsg = deployResult.errors?.[0]?.message || "Unknown API error";
-                return new Response(JSON.stringify({ success: false, error: "Cloudflare API: " + errMsg }), { status: 502, headers: { "Content-Type": "application/json" } });
-            }
-        }
-
-        if (data.action === "rollback") {
-            if (!accountId || !apiToken || !workerName) {
-                return new Response(JSON.stringify({ success: false, error: "CF credentials not configured" }), { status: 400, headers: { "Content-Type": "application/json" } });
-            }
-
-            let rollbackVersion = null;
-            let rollbackCode = null;
-            if (env.IOT_DB) {
-                try {
-                    const stored = await d1Get(env, "sys_update_rollback");
-                    if (stored) {
-                        const info = JSON.parse(stored);
-                        rollbackVersion = info.version;
-                        rollbackCode = info.code || null;
-                    }
-                } catch(e) {}
-            }
-            if (!rollbackCode) {
-                return new Response(JSON.stringify({ success: false, error: "No rollback code stored in D1. A deployment must succeed first to create a backup." }), { status: 404, headers: { "Content-Type": "application/json" } });
-            }
-
-            const deployRes = await deployWorkerToCloudflare(accountId, apiToken, workerName, rollbackCode);
-            const deployResult = await deployRes.json();
-
-            if (deployResult.success) {
-                ctx?.waitUntil(logActivity(env, "Panel Rollback", `Rolled back to v${rollbackVersion || "previous"}`).catch(()=>{}));
-                return new Response(JSON.stringify({ success: true, message: `Rolled back to v${rollbackVersion || "previous"}`, newVersion: rollbackVersion }), { headers: { "Content-Type": "application/json" } });
             } else {
                 const errMsg = deployResult.errors?.[0]?.message || "Unknown API error";
                 return new Response(JSON.stringify({ success: false, error: "Cloudflare API: " + errMsg }), { status: 502, headers: { "Content-Type": "application/json" } });
@@ -4630,14 +4561,6 @@ function getDashboardUI(hasDB) {
                               </div>
                               <p class="text-xs text-slate-400 md:col-span-2" data-i18n="desc_cf_api">Optional: Monitor Worker free usage limits (100k/day). Needs Account Analytics Read permission.</p>
                           </div>
-
-                          <!-- Rollback Section -->
-                          <div class="bg-white dark:bg-darkcard rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-darkborder mt-6">
-                              <h3 class="text-sm uppercase font-bold text-slate-500 tracking-wider mb-2" data-i18n="rollback_title">Rollback</h3>
-                              <p class="text-xs text-slate-400 mb-4" data-i18n="rollback_desc">Revert to the previous version if the update caused issues.</p>
-                              <button onclick="doRollback()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition-colors" data-i18n="rollback_btn">Rollback to Previous</button>
-                              <p id="rollback-status" class="hidden text-xs font-bold mt-2"></p>
-                          </div>
                       </div>
                       
                           <!-- USERS VIEW -->
@@ -5006,11 +4929,10 @@ function getDashboardUI(hasDB) {
                    ov_quick_actions: "Quick Actions", ov_add_user: "Add User", ov_backup_config: "Backup Config", ov_refresh: "Refresh Statistics", ov_manage_users: "Manage Users",
                    ov_gb_unit: "GB",
                    lbl_allow_sync:"Allow Sync",
-                   deploy_btn: "Deploy Now", rollback_btn: "Rollback to Previous", update_deploying: "Deploying update...",
+                   deploy_btn: "Deploy Now", update_deploying: "Deploying update...",
                    update_success: "Update successful! Reloading...", update_error: "Update failed",
                    lbl_cf_worker: "CF Worker Script Name", desc_cf_worker: "Required for in-panel updates. The script name shown in your Cloudflare Workers dashboard.",
-                   rollback_title: "Rollback", rollback_desc: "Revert to the previous version if the update caused issues.",
-                   rollback_confirm: "Rollback to previous version?", view_github: "View on GitHub",
+                   view_github: "View on GitHub",
                    update_requires_cf: "Set CF Account ID, API Token, and Worker Name to enable in-panel deploy.",
                },
               fa: {
@@ -5059,11 +4981,10 @@ function getDashboardUI(hasDB) {
                    ov_quick_actions: "عملیات سریع", ov_add_user: "افزودن کاربر", ov_backup_config: "پشتیبان‌گیری", ov_refresh: "بروزرسانی آمار", ov_manage_users: "مدیریت کاربران",
                    ov_gb_unit: "گیگابایت",
                      lbl_allow_sync:"اجازه همگام سازی",
-                     deploy_btn: "هم‌اکنون نصب کن", rollback_btn: "بازگشت به نسخه قبل", update_deploying: "در حال نصب بروزرسانی...",
-                     update_success: "بروزرسانی موفق! در حال بارگذاری...", update_error: "خطا در بروزرسانی",
-                     lbl_cf_worker: "نام اسکریپت کارگر ابری", desc_cf_worker: "برای بروزرسانی خودکار الزامی است. نام اسکریپت در داشبورد کارگرهای ابری.",
-                     rollback_title: "بازگشت به نسخه قبل", rollback_desc: "در صورت بروز مشکل، به نسخه قبلی بازگردید.",
-                     rollback_confirm: "به نسخه قبل بازگردید؟", view_github: "مشاهده در گیت‌هاب",
+                      deploy_btn: "هم‌اکنون نصب کن", update_deploying: "در حال نصب بروزرسانی...",
+                      update_success: "بروزرسانی موفق! در حال بارگذاری...", update_error: "خطا در بروزرسانی",
+                      lbl_cf_worker: "نام اسکریپت کارگر ابری", desc_cf_worker: "برای بروزرسانی خودکار الزامی است. نام اسکریپت در داشبورد کارگرهای ابری.",
+                      view_github: "مشاهده در گیت‌هاب",
                      update_requires_cf: "برای نصب خودکار، شناسه اکانت، توکن API و نام کارگر را تنظیم کنید.",
                 }
           };
@@ -6363,41 +6284,6 @@ function getDashboardUI(hasDB) {
                   }
                   btn.innerHTML = origText;
                   btn.disabled = false;
-              }
-          }
-
-          async function doRollback() {
-              if (!confirm(i18n[lang].rollback_confirm || 'Rollback to previous version?')) return;
-              const statusEl = document.getElementById('rollback-status');
-              if (statusEl) {
-                  statusEl.classList.remove('hidden');
-                  statusEl.className = 'text-xs font-bold text-blue-600 animate-pulse mt-2';
-                  statusEl.textContent = i18n[lang].update_deploying || 'Rolling back...';
-              }
-              try {
-                  const res = await fetch(baseRoute + '/api/update', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ key: sessionKey, action: 'rollback' })
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                      if (statusEl) {
-                          statusEl.className = 'text-xs font-bold text-emerald-600 mt-2';
-                          statusEl.textContent = (i18n[lang].update_success || 'Done!') + ' v' + data.newVersion;
-                      }
-                      setTimeout(() => window.location.reload(), 3000);
-                  } else {
-                      if (statusEl) {
-                          statusEl.className = 'text-xs font-bold text-red-600 mt-2';
-                          statusEl.textContent = data.error || 'Rollback failed';
-                      }
-                  }
-              } catch(err) {
-                  if (statusEl) {
-                      statusEl.className = 'text-xs font-bold text-red-600 mt-2';
-                      statusEl.textContent = err.message;
-                  }
               }
           }
           
