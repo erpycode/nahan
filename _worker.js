@@ -48,6 +48,7 @@ const SYSTEM_DEFAULTS = {
     tgAdminId: "",
     cfAccountId: "",
     cfApiToken: "",
+    cfWorkerName: "",
     isPaused: false,
     silentAlerts: false,
     githubRepo: "itsyebekhe/nahan",
@@ -231,12 +232,14 @@ export default {
                 logs: `/${encodeURI(sysConfig.apiRoute)}/api/logs`,
                 users: `/${encodeURI(sysConfig.apiRoute)}/api/users`,
                 stats: `/${encodeURI(sysConfig.apiRoute)}/api/stats`,
+                update: `/${encodeURI(sysConfig.apiRoute)}/api/update`,
             };
 
             const isSyncRoute = reqPath.endsWith('/api/sync');
             const isUsersRoute = reqPath === routes.users || reqPath.endsWith('/api/users');
             const isStatsRoute = reqPath === routes.stats || reqPath.endsWith('/api/stats');
-            const isAuthorizedRoute = reqPath === routes.data || reqPath === routes.dash || reqPath === routes.auth || reqPath === routes.sync || reqPath === routes.tg || reqPath === routes.syncPanel || reqPath === routes.logs || isSyncRoute || isUsersRoute || isStatsRoute;
+            const isUpdateRoute = reqPath === routes.update || reqPath.endsWith('/api/update');
+            const isAuthorizedRoute = reqPath === routes.data || reqPath === routes.dash || reqPath === routes.auth || reqPath === routes.sync || reqPath === routes.tg || reqPath === routes.syncPanel || reqPath === routes.logs || isSyncRoute || isUsersRoute || isStatsRoute || isUpdateRoute;
 
             if (!isTelemetryStream && !isAuthorizedRoute) {
                 return serveMaintenancePage(request, url);
@@ -263,6 +266,9 @@ export default {
                 }
                 if (isStatsRoute) {
                     return await handleStatsApi(request, env);
+                }
+                if (isUpdateRoute) {
+                    return await handleUpdateApi(request, env, ctx);
                 }
                 if (reqPath === routes.syncPanel) {
                     if (request.method !== "POST") return new Response("405", { status: 405 });
@@ -1068,6 +1074,178 @@ async function handleStatsApi(request, env) {
             }
         }), { headers: { "Content-Type": "application/json" } });
     } catch (e) { return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: { "Content-Type": "application/json" } }); }
+}
+
+function cmpVersions(a, b) {
+    const strip = v => String(v).replace(/^v/, '').trim();
+    const pa = strip(a).split('.').map(Number);
+    const pb = strip(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        let na = pa[i] || 0, nb = pb[i] || 0;
+        if (na > nb) return 1;
+        if (nb > na) return -1;
+    }
+    return 0;
+}
+
+async function handleUpdateApi(request, env, ctx) {
+    try {
+        if (request.method !== "POST") return new Response("405", { status: 405 });
+        const data = await request.json();
+        if (data.key !== sysConfig.masterKey) {
+            return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+        }
+
+        const accountId = sysConfig.cfAccountId;
+        const apiToken = sysConfig.cfApiToken;
+        const workerName = sysConfig.cfWorkerName;
+        const repo = (sysConfig.githubRepo || "itsyebekhe/nahan").replace(/https?:\/\/github\.com\//, '').trim();
+
+        if (data.action === "check") {
+            let remoteVer = null;
+            try {
+                const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/version`);
+                if (res.ok) {
+                    const txt = (await res.text()).trim();
+                    if (txt && txt.length <= 15) remoteVer = txt;
+                }
+            } catch(e) {}
+            if (!remoteVer) {
+                try {
+                    const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/_worker.js`);
+                    if (res.ok) {
+                        const code = await res.text();
+                        const match = code.match(/const\s+CURRENT_VERSION\s*=\s*["']([^"']+)["']/);
+                        if (match) remoteVer = match[1];
+                    }
+                } catch(e) {}
+            }
+            if (!remoteVer) {
+                return new Response(JSON.stringify({ success: false, error: "Could not fetch remote version" }), { status: 502, headers: { "Content-Type": "application/json" } });
+            }
+            const hasCredentials = !!(accountId && apiToken && workerName);
+            let rollbackAvailable = false;
+            if (env.IOT_DB) {
+                try {
+                    const stored = await d1Get(env, "sys_update_rollback");
+                    if (stored) { const r = JSON.parse(stored); rollbackAvailable = !!r.version; }
+                } catch(e) {}
+            }
+            return new Response(JSON.stringify({
+                success: true, current: CURRENT_VERSION, latest: remoteVer,
+                updateAvailable: cmpVersions(CURRENT_VERSION, remoteVer) < 0,
+                canDeploy: hasCredentials, rollbackAvailable
+            }), { headers: { "Content-Type": "application/json" } });
+        }
+
+        if (data.action === "deploy") {
+            if (!accountId || !apiToken || !workerName) {
+                return new Response(JSON.stringify({ success: false, error: "CF credentials not configured" }), { status: 400, headers: { "Content-Type": "application/json" } });
+            }
+
+            let latestCode;
+            try {
+                const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/_worker.js`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                latestCode = await res.text();
+            } catch(e) {
+                return new Response(JSON.stringify({ success: false, error: "Failed to fetch code from GitHub: " + e.message }), { status: 502, headers: { "Content-Type": "application/json" } });
+            }
+
+            const versionMatch = latestCode.match(/const\s+CURRENT_VERSION\s*=\s*["']([^"']+)["']/);
+            if (!versionMatch) {
+                return new Response(JSON.stringify({ success: false, error: "Invalid code: missing CURRENT_VERSION" }), { status: 400, headers: { "Content-Type": "application/json" } });
+            }
+            const newVersion = versionMatch[1];
+            if (cmpVersions(CURRENT_VERSION, newVersion) >= 0) {
+                return new Response(JSON.stringify({ success: false, error: "Remote version is not newer" }), { status: 400, headers: { "Content-Type": "application/json" } });
+            }
+
+            if (env.IOT_DB) {
+                try {
+                    await d1Put(env, "sys_update_rollback", JSON.stringify({
+                        version: CURRENT_VERSION, timestamp: Date.now(), workerName
+                    }));
+                } catch(e) {}
+            }
+
+            const deployRes = await fetch(
+                `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
+                { method: "PUT", headers: { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/javascript" }, body: latestCode }
+            );
+            const deployResult = await deployRes.json();
+
+            if (deployResult.success) {
+                ctx?.waitUntil(logActivity(env, "Panel Updated", `v${CURRENT_VERSION} → v${newVersion}`).catch(()=>{}));
+                if (sysConfig.tgToken && (sysConfig.tgAdminId || sysConfig.tgChatId)) {
+                    const tgMsg = `🔄 <b>Panel Updated</b>\n\n📦 v${CURRENT_VERSION} → v${newVersion}`;
+                    const notifyChatId = sysConfig.tgAdminId || sysConfig.tgChatId;
+                    ctx?.waitUntil(fetch(`https://api.telegram.org/bot${sysConfig.tgToken}/sendMessage`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chat_id: notifyChatId, text: tgMsg, parse_mode: 'HTML' })
+                    }).catch(()=>{}));
+                }
+                return new Response(JSON.stringify({ success: true, message: `Updated to v${newVersion}`, newVersion }), { headers: { "Content-Type": "application/json" } });
+            } else {
+                const errMsg = deployResult.errors?.[0]?.message || "Unknown API error";
+                return new Response(JSON.stringify({ success: false, error: "Cloudflare API: " + errMsg }), { status: 502, headers: { "Content-Type": "application/json" } });
+            }
+        }
+
+        if (data.action === "rollback") {
+            if (!accountId || !apiToken || !workerName) {
+                return new Response(JSON.stringify({ success: false, error: "CF credentials not configured" }), { status: 400, headers: { "Content-Type": "application/json" } });
+            }
+
+            let rollbackInfo = null;
+            if (env.IOT_DB) {
+                try {
+                    const stored = await d1Get(env, "sys_update_rollback");
+                    if (stored) rollbackInfo = JSON.parse(stored);
+                } catch(e) {}
+            }
+            if (!rollbackInfo || !rollbackInfo.version) {
+                return new Response(JSON.stringify({ success: false, error: "No rollback data available" }), { status: 404, headers: { "Content-Type": "application/json" } });
+            }
+
+            let rollbackCode = null;
+            const tryUrls = [
+                `https://raw.githubusercontent.com/${repo}/refs/tags/v${rollbackInfo.version}/_worker.js`,
+                `https://raw.githubusercontent.com/${repo}/v${rollbackInfo.version}/_worker.js`,
+                `https://raw.githubusercontent.com/${repo}/${rollbackInfo.version}/_worker.js`,
+            ];
+            for (const url of tryUrls) {
+                try {
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const code = await res.text();
+                        if (code.includes("CURRENT_VERSION")) { rollbackCode = code; break; }
+                    }
+                } catch(e) {}
+            }
+            if (!rollbackCode) {
+                return new Response(JSON.stringify({ success: false, error: `Could not fetch v${rollbackInfo.version} from GitHub` }), { status: 404, headers: { "Content-Type": "application/json" } });
+            }
+
+            const deployRes = await fetch(
+                `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
+                { method: "PUT", headers: { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/javascript" }, body: rollbackCode }
+            );
+            const deployResult = await deployRes.json();
+
+            if (deployResult.success) {
+                ctx?.waitUntil(logActivity(env, "Panel Rollback", `Rolled back to v${rollbackInfo.version}`).catch(()=>{}));
+                return new Response(JSON.stringify({ success: true, message: `Rolled back to v${rollbackInfo.version}`, newVersion: rollbackInfo.version }), { headers: { "Content-Type": "application/json" } });
+            } else {
+                const errMsg = deployResult.errors?.[0]?.message || "Unknown API error";
+                return new Response(JSON.stringify({ success: false, error: "Cloudflare API: " + errMsg }), { status: 502, headers: { "Content-Type": "application/json" } });
+            }
+        }
+
+        return new Response(JSON.stringify({ success: false, error: "Invalid action" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    } catch(e) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
 }
 
 async function handleAuth(request, hostName, ctx, env) {
@@ -3915,9 +4093,9 @@ function getDashboardUI(hasDB) {
                               </div>
                               <div class="flex gap-2 w-full sm:w-auto shrink-0 justify-end">
                                   <button onclick="dismissUpdate()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition-colors" data-i18n="btn_cancel">Cancel</button>
-                                  <a id="update-alert-btn" href="https://github.com/itsyebekhe/nahan" target="_blank" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5" data-i18n="update_btn">
-                                      Get Latest Code ➜
-                                  </a>
+                                  <button onclick="doUpdate()" id="update-deploy-btn" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5" data-i18n="deploy_btn">
+                                      🚀 Deploy Now
+                                  </button>
                               </div>
                           </div>
                           <!-- Dynamic Changelog Section -->
@@ -3929,6 +4107,10 @@ function getDashboardUI(hasDB) {
                               <div id="update-changelog-content" class="text-xs text-slate-600 dark:text-slate-400 bg-amber-500/[0.04] dark:bg-slate-900/40 p-4 rounded-2xl max-h-48 overflow-y-auto font-sans leading-relaxed border border-amber-200/20 max-w-none text-start">
                                   <p class="animate-pulse">Loading changelog...</p>
                               </div>
+                          </div>
+                          <div id="update-deploy-status" class="hidden w-full mt-3 p-3 rounded-xl text-sm font-bold text-center"></div>
+                          <div class="w-full mt-2 text-center">
+                              <a id="update-github-link" href="https://github.com/itsyebekhe/nahan" target="_blank" class="text-xs text-slate-400 hover:text-amber-500 transition-colors underline" data-i18n="view_github">View on GitHub</a>
                           </div>
                       </div>
 
@@ -4410,7 +4592,20 @@ function getDashboardUI(hasDB) {
                                       <button type="button" onclick="const n=document.getElementById('cfg-cf-token');n.type=n.type==='password'?'text':'password'" class="absolute inset-y-0 end-0 flex items-center px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">👁️</button>
                                   </div>
                               </div>
+                              <div class="space-y-1 text-start md:col-span-2">
+                                  <label class="block text-sm font-bold text-slate-600 dark:text-slate-300 ms-1" data-i18n="lbl_cf_worker">CF Worker Script Name</label>
+                                  <input type="text" id="cfg-cf-worker" placeholder="e.g. nahan" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-darkborder bg-slate-50 dark:bg-slate-800 focus:border-primary outline-none text-sm font-mono">
+                                  <p class="text-xs text-slate-400 mt-1 ms-1" data-i18n="desc_cf_worker">Required for in-panel updates. The script name shown in your Cloudflare Workers dashboard.</p>
+                              </div>
                               <p class="text-xs text-slate-400 md:col-span-2" data-i18n="desc_cf_api">Optional: Monitor Worker free usage limits (100k/day). Needs Account Analytics Read permission.</p>
+                          </div>
+
+                          <!-- Rollback Section -->
+                          <div class="bg-white dark:bg-darkcard rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-darkborder mt-6">
+                              <h3 class="text-sm uppercase font-bold text-slate-500 tracking-wider mb-2" data-i18n="rollback_title">Rollback</h3>
+                              <p class="text-xs text-slate-400 mb-4" data-i18n="rollback_desc">Revert to the previous version if the update caused issues.</p>
+                              <button onclick="doRollback()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition-colors" data-i18n="rollback_btn">Rollback to Previous</button>
+                              <p id="rollback-status" class="hidden text-xs font-bold mt-2"></p>
                           </div>
                       </div>
                       
@@ -4780,7 +4975,13 @@ function getDashboardUI(hasDB) {
                    ov_quick_actions: "Quick Actions", ov_add_user: "Add User", ov_backup_config: "Backup Config", ov_refresh: "Refresh Statistics", ov_manage_users: "Manage Users",
                    ov_gb_unit: "GB",
                    lbl_allow_sync:"Allow Sync",
-              },
+                   deploy_btn: "Deploy Now", rollback_btn: "Rollback to Previous", update_deploying: "Deploying update...",
+                   update_success: "Update successful! Reloading...", update_error: "Update failed",
+                   lbl_cf_worker: "CF Worker Script Name", desc_cf_worker: "Required for in-panel updates. The script name shown in your Cloudflare Workers dashboard.",
+                   rollback_title: "Rollback", rollback_desc: "Revert to the previous version if the update caused issues.",
+                   rollback_confirm: "Rollback to previous version?", view_github: "View on GitHub",
+                   update_requires_cf: "Set CF Account ID, API Token, and Worker Name to enable in-panel deploy.",
+               },
               fa: {
                   title: "دروازه نهان", pass_ph: "کلید اصلی", login_btn: "ورود به سیستم", err_pass: "دسترسی مسدود شد", missing_db: "⚠️ فضای پایگاه داده یافت نشد! تنظیمات ذخیره نمی‌شوند.",
                   logout: "خروج", tab_overview: "نمای کلی", tab_info: "نقاط اتصال", tab_status: "وضعیت شبکه", tab_settings: "تنظیمات پایه", tab_adv: "پیشرفته", tab_logs: "گزارش فعالیت",
@@ -4826,7 +5027,13 @@ function getDashboardUI(hasDB) {
                    ov_system: "سیستم", ov_recent_activity: "فعالیت‌های اخیر", ov_view_all: "مشاهده همه ←", ov_loading: "در حال بارگذاری...",
                    ov_quick_actions: "عملیات سریع", ov_add_user: "افزودن کاربر", ov_backup_config: "پشتیبان‌گیری", ov_refresh: "بروزرسانی آمار", ov_manage_users: "مدیریت کاربران",
                    ov_gb_unit: "گیگابایت",
-                    lbl_allow_sync:"اجازه همگام سازی",
+                     lbl_allow_sync:"اجازه همگام سازی",
+                     deploy_btn: "هم‌اکنون نصب کن", rollback_btn: "بازگشت به نسخه قبل", update_deploying: "در حال نصب بروزرسانی...",
+                     update_success: "بروزرسانی موفق! در حال بارگذاری...", update_error: "خطا در بروزرسانی",
+                     lbl_cf_worker: "نام اسکریپت کارگر ابری", desc_cf_worker: "برای بروزرسانی خودکار الزامی است. نام اسکریپت در داشبورد کارگرهای ابری.",
+                     rollback_title: "بازگشت به نسخه قبل", rollback_desc: "در صورت بروز مشکل، به نسخه قبلی بازگردید.",
+                     rollback_confirm: "به نسخه قبل بازگردید؟", view_github: "مشاهده در گیت‌هاب",
+                     update_requires_cf: "برای نصب خودکار، شناسه اکانت، توکن API و نام کارگر را تنظیم کنید.",
                 }
           };
 
@@ -5256,6 +5463,7 @@ function getDashboardUI(hasDB) {
                   enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
                   tgToken: el('cfg-tg-token').value, tgChatId: el('cfg-tg-chat').value, tgAdminId: el('cfg-tg-admin').value,
                   cfAccountId: el('cfg-cf-acc').value, cfApiToken: el('cfg-cf-token').value,
+                  cfWorkerName: el('cfg-cf-worker').value,
                   isPaused: el('cfg-pause').checked, silentAlerts: el('cfg-silent').checked,
                   githubRepo: el('cfg-github-repo').value,
                   subUserAgent: el('cfg-sub-ua').value,
@@ -5296,6 +5504,7 @@ function getDashboardUI(hasDB) {
                       mapId('cfg-tg-admin', conf.tgAdminId);
                       mapId('cfg-cf-acc', conf.cfAccountId);
                       mapId('cfg-cf-token', conf.cfApiToken);
+                      mapId('cfg-cf-worker', conf.cfWorkerName);
                       mapId('cfg-github-repo', conf.githubRepo);
                       mapId('cfg-sub-ua', conf.subUserAgent);
                       mapId('cfg-custom-panel-url', conf.customPanelUrl);
@@ -5409,6 +5618,7 @@ function getDashboardUI(hasDB) {
                       document.getElementById('cfg-tg-admin').value = conf.tgAdminId || '';
                       document.getElementById('cfg-cf-acc').value = conf.cfAccountId || '';
                       document.getElementById('cfg-cf-token').value = conf.cfApiToken || '';
+                      document.getElementById('cfg-cf-worker').value = conf.cfWorkerName || '';
                       document.getElementById('cfg-pause').checked = conf.isPaused || false;
                       document.getElementById('cfg-silent').checked = conf.silentAlerts || false;
                       document.getElementById('cfg-github-repo').value = conf.githubRepo || 'itsyebekhe/nahan';
@@ -5532,6 +5742,7 @@ function getDashboardUI(hasDB) {
                       enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
                       tgToken: el('cfg-tg-token').value, tgChatId: el('cfg-tg-chat').value, tgAdminId: el('cfg-tg-admin').value,
                       cfAccountId: el('cfg-cf-acc').value, cfApiToken: el('cfg-cf-token').value,
+                      cfWorkerName: el('cfg-cf-worker').value,
                       isPaused: el('cfg-pause').checked, silentAlerts: el('cfg-silent').checked,
                       githubRepo: el('cfg-github-repo').value,
                       subUserAgent: el('cfg-sub-ua').value,
@@ -5583,6 +5794,7 @@ function getDashboardUI(hasDB) {
                       enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
                       tgToken: el('cfg-tg-token').value, tgChatId: el('cfg-tg-chat').value, tgAdminId: el('cfg-tg-admin').value,
                       cfAccountId: el('cfg-cf-acc').value, cfApiToken: el('cfg-cf-token').value,
+                      cfWorkerName: el('cfg-cf-worker').value,
                       isPaused: el('cfg-pause').checked, silentAlerts: el('cfg-silent').checked,
                       githubRepo: el('cfg-github-repo').value,
                       subUserAgent: el('cfg-sub-ua').value,
@@ -6052,56 +6264,109 @@ function getDashboardUI(hasDB) {
           }
 
           async function checkUpdate() {
-              let repo = document.getElementById('cfg-github-repo')?.value || window.nahanConfig?.githubRepo || 'itsyebekhe/nahan';
-              repo = repo.replace(/https:\\/\\/github\\.com\\//, '').trim();
-              if (!repo) return;
-              
               try {
-                  let remoteVer = null;
-                  try {
-                      const res = await fetch('https://raw.githubusercontent.com/' + repo + '/main/version');
-                      if (res.ok) {
-                          const txt = await res.text();
-                          if (txt && txt.trim().length <= 15) {
-                              remoteVer = txt.trim();
-                          }
-                      }
-                  } catch(e) {}
-                  
-                  if (!remoteVer) {
-                      const res = await fetch('https://raw.githubusercontent.com/' + repo + '/main/worker.js');
-                      if (res.ok) {
-                          const code = await res.text();
-                          const match = code.match(/const\\s+CURRENT_VERSION\\s*=\\s*["\']([^"\']+)["\']/);
-                          if (match && match[1]) {
-                              remoteVer = match[1];
-                          }
+                  const res = await fetch(baseRoute + '/api/update', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: sessionKey, action: 'check' })
+                  });
+                  const data = await res.json();
+                  if (data.success && data.updateAvailable) {
+                      window._updateData = data;
+                      showUpdateBanner((document.getElementById('cfg-github-repo')?.value || window.nahanConfig?.githubRepo || 'itsyebekhe/nahan').replace(/https?:\\/\\/github\\.com\\//, '').trim(), data.latest);
+                  }
+                  if (data.success && !data.canDeploy) {
+                      const statusEl = document.getElementById('update-deploy-status');
+                      if (statusEl) {
+                          statusEl.classList.remove('hidden');
+                          statusEl.className = 'w-full mt-3 p-3 rounded-xl text-sm font-bold text-center text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400';
+                          statusEl.textContent = i18n[lang].update_requires_cf || 'Configure CF credentials to enable auto-deploy.';
                       }
                   }
-                  
-                if (remoteVer) {
-                    const strip = v => v.replace(/^v/, '').trim();
-                    const rVer = strip(remoteVer);
-                    const cVer = strip(CURRENT_VERSION);
-                    
-                    const cmpVersions = (a, b) => {
-                        const pa = a.split('.').map(Number);
-                        const pb = b.split('.').map(Number);
-                        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-                            let na = pa[i] || 0;
-                            let nb = pb[i] || 0;
-                            if (na > nb) return 1;
-                            if (nb > na) return -1;
-                        }
-                        return 0;
-                    };
-                    
-                    if (cmpVersions(cVer, rVer) < 0) {
-                        showUpdateBanner(repo, rVer);
-                    }
-                }
               } catch(err) {
                   console.error("Update check failed:", err);
+              }
+          }
+
+          async function doUpdate() {
+              const btn = document.getElementById('update-deploy-btn');
+              const statusEl = document.getElementById('update-deploy-status');
+              if (!btn) return;
+              if (!confirm(lang === 'fa' ? 'آیا از نصب بروزرسانی اطمینان دارید؟' : 'Deploy the latest version now?')) return;
+
+              const origText = btn.innerHTML;
+              btn.innerHTML = '⏳ ' + (i18n[lang].update_deploying || 'Deploying...');
+              btn.disabled = true;
+              if (statusEl) {
+                  statusEl.classList.remove('hidden');
+                  statusEl.className = 'w-full mt-3 p-3 rounded-xl text-sm font-bold text-center text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 animate-pulse';
+                  statusEl.textContent = i18n[lang].update_deploying || 'Deploying update...';
+              }
+
+              try {
+                  const res = await fetch(baseRoute + '/api/update', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: sessionKey, action: 'deploy' })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                      if (statusEl) {
+                          statusEl.className = 'w-full mt-3 p-3 rounded-xl text-sm font-bold text-center text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400';
+                          statusEl.textContent = (i18n[lang].update_success || 'Update successful!') + ' v' + data.newVersion;
+                      }
+                      btn.innerHTML = '✅ ' + (i18n[lang].update_success || 'Done!');
+                      setTimeout(() => window.location.reload(), 3000);
+                  } else {
+                      if (statusEl) {
+                          statusEl.className = 'w-full mt-3 p-3 rounded-xl text-sm font-bold text-center text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400';
+                          statusEl.textContent = (i18n[lang].update_error || 'Update failed') + ': ' + (data.error || 'Unknown error');
+                      }
+                      btn.innerHTML = origText;
+                      btn.disabled = false;
+                  }
+              } catch(err) {
+                  if (statusEl) {
+                      statusEl.className = 'w-full mt-3 p-3 rounded-xl text-sm font-bold text-center text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400';
+                      statusEl.textContent = (i18n[lang].update_error || 'Update failed') + ': ' + err.message;
+                  }
+                  btn.innerHTML = origText;
+                  btn.disabled = false;
+              }
+          }
+
+          async function doRollback() {
+              if (!confirm(i18n[lang].rollback_confirm || 'Rollback to previous version?')) return;
+              const statusEl = document.getElementById('rollback-status');
+              if (statusEl) {
+                  statusEl.classList.remove('hidden');
+                  statusEl.className = 'text-xs font-bold text-blue-600 animate-pulse mt-2';
+                  statusEl.textContent = i18n[lang].update_deploying || 'Rolling back...';
+              }
+              try {
+                  const res = await fetch(baseRoute + '/api/update', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: sessionKey, action: 'rollback' })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                      if (statusEl) {
+                          statusEl.className = 'text-xs font-bold text-emerald-600 mt-2';
+                          statusEl.textContent = (i18n[lang].update_success || 'Done!') + ' v' + data.newVersion;
+                      }
+                      setTimeout(() => window.location.reload(), 3000);
+                  } else {
+                      if (statusEl) {
+                          statusEl.className = 'text-xs font-bold text-red-600 mt-2';
+                          statusEl.textContent = data.error || 'Rollback failed';
+                      }
+                  }
+              } catch(err) {
+                  if (statusEl) {
+                      statusEl.className = 'text-xs font-bold text-red-600 mt-2';
+                      statusEl.textContent = err.message;
+                  }
               }
           }
           
@@ -6205,7 +6470,8 @@ function getDashboardUI(hasDB) {
                   : 'A newer version (v' + version + ') is available in your GitHub repository (' + repo + ').';
                   
               document.getElementById('update-alert-text').textContent = msg;
-              document.getElementById('update-alert-btn').href = 'https://github.com/' + repo;
+              const ghLink = document.getElementById('update-github-link');
+              if (ghLink) ghLink.href = 'https://github.com/' + repo;
               banner.classList.remove('hidden');
               banner.classList.add('flex');
               
