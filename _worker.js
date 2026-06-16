@@ -81,6 +81,35 @@ let sysUsageCacheTime = 0;
 let backupIpCache = null;
 let backupIpCacheTime = 0;
 
+async function deployWorkerToCloudflare(accountId, apiToken, workerName, code) {
+    let currentBindings = [];
+    try {
+        const settingsRes = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}/settings`,
+            { headers: { "Authorization": `Bearer ${apiToken}` } }
+        );
+        const settingsJson = await settingsRes.json();
+        if (settingsJson.success && settingsJson.result?.bindings) {
+            currentBindings = settingsJson.result.bindings;
+        }
+    } catch(e) {}
+
+    const metadata = {
+        main_module: "_worker.js",
+        compatibility_date: "2024-03-01",
+        bindings: currentBindings
+    };
+
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+    form.append("_worker.js", new Blob([code], { type: "application/javascript+module" }), "_worker.js");
+
+    return await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
+        { method: "PUT", headers: { "Authorization": `Bearer ${apiToken}` }, body: form }
+    );
+}
+
 async function d1Init(env) {
     if(env.IOT_DB && !env.IOT_DB_INITIALIZED) {
         try { await env.IOT_DB.prepare("CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT)").run(); env.IOT_DB_INITIALIZED = true; } catch(e) { env.IOT_DB_INITIALIZED = true; }
@@ -1169,10 +1198,7 @@ async function handleUpdateApi(request, env, ctx) {
                 } catch(e) {}
             }
 
-            const deployRes = await fetch(
-                `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
-                { method: "PUT", headers: { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/javascript" }, body: latestCode }
-            );
+            const deployRes = await deployWorkerToCloudflare(accountId, apiToken, workerName, latestCode);
             const deployResult = await deployRes.json();
 
             if (deployResult.success) {
@@ -1227,10 +1253,7 @@ async function handleUpdateApi(request, env, ctx) {
                 return new Response(JSON.stringify({ success: false, error: `Could not fetch v${rollbackInfo.version} from GitHub` }), { status: 404, headers: { "Content-Type": "application/json" } });
             }
 
-            const deployRes = await fetch(
-                `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
-                { method: "PUT", headers: { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/javascript" }, body: rollbackCode }
-            );
+            const deployRes = await deployWorkerToCloudflare(accountId, apiToken, workerName, rollbackCode);
             const deployResult = await deployRes.json();
 
             if (deployResult.success) {
