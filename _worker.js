@@ -1193,9 +1193,30 @@ async function handleUpdateApi(request, env, ctx) {
 
             if (env.IOT_DB) {
                 try {
-                    await d1Put(env, "sys_update_rollback", JSON.stringify({
-                        version: CURRENT_VERSION, timestamp: Date.now(), workerName
-                    }));
+                    let currentCode = null;
+                    try {
+                        const codeRes = await fetch(
+                            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
+                            { headers: { "Authorization": `Bearer ${apiToken}` } }
+                        );
+                        if (codeRes.ok) {
+                            const rawText = await codeRes.text();
+                            const ct = codeRes.headers.get("content-type") || "";
+                            if (ct.includes("json")) {
+                                try {
+                                    const json = JSON.parse(rawText);
+                                    currentCode = typeof json.result === "string" ? json.result : (typeof json.result?.script === "string" ? json.result.script : rawText);
+                                } catch(e) { currentCode = rawText; }
+                            } else {
+                                currentCode = rawText;
+                            }
+                        }
+                    } catch(e) {}
+                    if (currentCode) {
+                        await d1Put(env, "sys_update_rollback", JSON.stringify({
+                            version: CURRENT_VERSION, timestamp: Date.now(), workerName, code: currentCode
+                        }));
+                    }
                 } catch(e) {}
             }
 
@@ -1224,42 +1245,28 @@ async function handleUpdateApi(request, env, ctx) {
                 return new Response(JSON.stringify({ success: false, error: "CF credentials not configured" }), { status: 400, headers: { "Content-Type": "application/json" } });
             }
 
-            let rollbackInfo = null;
+            let rollbackVersion = null;
+            let rollbackCode = null;
             if (env.IOT_DB) {
                 try {
                     const stored = await d1Get(env, "sys_update_rollback");
-                    if (stored) rollbackInfo = JSON.parse(stored);
-                } catch(e) {}
-            }
-            if (!rollbackInfo || !rollbackInfo.version) {
-                return new Response(JSON.stringify({ success: false, error: "No rollback data available" }), { status: 404, headers: { "Content-Type": "application/json" } });
-            }
-
-            let rollbackCode = null;
-            const tryUrls = [
-                `https://raw.githubusercontent.com/${repo}/refs/tags/v${rollbackInfo.version}/_worker.js`,
-                `https://raw.githubusercontent.com/${repo}/v${rollbackInfo.version}/_worker.js`,
-                `https://raw.githubusercontent.com/${repo}/${rollbackInfo.version}/_worker.js`,
-            ];
-            for (const url of tryUrls) {
-                try {
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        const code = await res.text();
-                        if (code.includes("CURRENT_VERSION")) { rollbackCode = code; break; }
+                    if (stored) {
+                        const info = JSON.parse(stored);
+                        rollbackVersion = info.version;
+                        rollbackCode = info.code || null;
                     }
                 } catch(e) {}
             }
             if (!rollbackCode) {
-                return new Response(JSON.stringify({ success: false, error: `Could not fetch v${rollbackInfo.version} from GitHub` }), { status: 404, headers: { "Content-Type": "application/json" } });
+                return new Response(JSON.stringify({ success: false, error: "No rollback code stored in D1. A deployment must succeed first to create a backup." }), { status: 404, headers: { "Content-Type": "application/json" } });
             }
 
             const deployRes = await deployWorkerToCloudflare(accountId, apiToken, workerName, rollbackCode);
             const deployResult = await deployRes.json();
 
             if (deployResult.success) {
-                ctx?.waitUntil(logActivity(env, "Panel Rollback", `Rolled back to v${rollbackInfo.version}`).catch(()=>{}));
-                return new Response(JSON.stringify({ success: true, message: `Rolled back to v${rollbackInfo.version}`, newVersion: rollbackInfo.version }), { headers: { "Content-Type": "application/json" } });
+                ctx?.waitUntil(logActivity(env, "Panel Rollback", `Rolled back to v${rollbackVersion || "previous"}`).catch(()=>{}));
+                return new Response(JSON.stringify({ success: true, message: `Rolled back to v${rollbackVersion || "previous"}`, newVersion: rollbackVersion }), { headers: { "Content-Type": "application/json" } });
             } else {
                 const errMsg = deployResult.errors?.[0]?.message || "Unknown API error";
                 return new Response(JSON.stringify({ success: false, error: "Cloudflare API: " + errMsg }), { status: 502, headers: { "Content-Type": "application/json" } });
