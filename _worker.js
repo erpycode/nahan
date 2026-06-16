@@ -82,6 +82,7 @@ let backupIpCache = null;
 let backupIpCacheTime = 0;
 
 async function deployWorkerToCloudflare(accountId, apiToken, workerName, code) {
+
     let currentBindings = [];
     try {
         const settingsRes = await fetch(
