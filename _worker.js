@@ -5,7 +5,7 @@ import { connect } from "cloudflare:sockets";
  * Handles real-time binary streams from remote sensor nodes.
  */
 
-const CURRENT_VERSION = "2.5.4.2";
+const CURRENT_VERSION = "2.5.5";
 
 const getAlpha = () => String.fromCharCode(118, 108, 101, 115, 115);
 const getBeta = () => String.fromCharCode(116, 114, 111, 106, 97, 110);
@@ -4990,6 +4990,18 @@ function getDashboardUI(hasDB) {
           };
 
           const CHANGELOG_DATA = {
+              "2.5.5": {
+                  headline: { en: "One-Click Panel Update", fa: "بروزرسانی پنل با یک کلیک" },
+                  added: [
+                      { en: "Update the panel directly from the admin panel — no need to use Cloudflare dashboard", fa: "بروزرسانی پنل مستقیماً از پنل مدیریت — بدون نیاز به داشبورد کلودفلر" },
+                      { en: "One-click deployment inside the panel for quick and easy updates", fa: "نصب با یک کلیک داخل پنل برای بروزرسانی سریع و آسان" },
+                  ],
+                  fixed: [],
+                  improved: [
+                      { en: "Improved stability and reliability of the update system", fa: "بهبود پایداری و اطمینان سیستم بروزرسانی" },
+                  ],
+                  notes: []
+              },
               "2.5.4.2": {
                   headline: { en: "Performance Optimization & Background Processing", fa: "بهینه‌سازی عملکرد و پردازش پس‌زمینه" },
                   added: [],
