@@ -2995,7 +2995,7 @@ proxyip.cmliussss.net" class="w-full px-4 py-3 rounded-xl border border-slate-20
                     <span data-i18n="show_qr">Show QR Code</span>
                 </button>
 <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
-    <a href="v2rayng://install-sub?url=${encodeURIComponent(p.sync)}" class="text-center p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold hover:bg-indigo-100 transition-colors">v2rayNG</a>
+    <a href="v2rayng://install-sub?url=${encodeURIComponent(p.sync + (p.sync.includes('?') ? '&flag=base64' : '?flag=base64'))}" class="text-center p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold hover:bg-indigo-100 transition-colors">v2rayNG</a>
     <a href="shadowrocket://add/sub://${btoa(p.sync)}" class="text-center p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold hover:bg-blue-100 transition-colors">Shadowrocket</a>
     <a href="streisand://import/${p.sync}" class="text-center p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold hover:bg-emerald-100 transition-colors">Streisand</a>
     <a href="v2ray://install-sub?url=${encodeURIComponent(p.sync)}" class="text-center p-2 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold hover:bg-purple-100 transition-colors">v2rayN</a>
