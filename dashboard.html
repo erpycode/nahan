@@ -274,17 +274,26 @@ html.dark select option {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
 [data-accordion-content] { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+.login-input {
+    background-color: var(--color-bg-alt) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+}
+.login-input:focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent) !important;
+}
 </style></head>
   <body class="text-[var(--color-text)] h-[100dvh] flex flex-col md:flex-row overflow-hidden selection:bg-primary selection:text-white transition-colors duration-300 bg-[var(--color-bg)]">
 
       <!-- Global Controls -->
       <div class="fixed top-4 end-4 md:top-5 md:end-5 flex items-center gap-2 z-50">
-          <span id="top-version-badge" class="hidden md:inline-block px-3 py-1.5 rounded-xl text-[11px] font-mono font-bold" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;">v__CURRENT_VERSION__</span>
-          <a href="https://github.com/itsyebekhe/nahan" id="github-link-btn" target="_blank" class="hidden md:inline-flex btn-top-bar p-2 rounded-xl transition-all" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;">
+          <span id="top-version-badge" class="hidden md:inline-block px-3 py-1.5 rounded-xl text-[11px] font-mono font-bold" style="background: color-mix(in srgb, var(--color-primary) 12%, transparent); border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent); color: var(--color-primary);">v__CURRENT_VERSION__</span>
+          <a href="https://github.com/itsyebekhe/nahan" id="github-link-btn" target="_blank" class="hidden md:inline-flex btn-top-bar p-2 rounded-xl transition-all" style="background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-muted);">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
           </a>
-          <button onclick="toggleLang()" id="lang-toggle" class="btn-top-bar px-3 py-1.5 rounded-xl text-sm font-bold transition-all" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;">EN</button>
-          <button onclick="toggleTheme()" class="btn-top-bar p-2 rounded-xl transition-all" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#f59e0b;">
+          <button onclick="toggleLang()" id="lang-toggle" class="btn-top-bar px-3 py-1.5 rounded-xl text-sm font-bold transition-all" style="background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text);">EN</button>
+          <button onclick="toggleTheme()" class="btn-top-bar p-2 rounded-xl transition-all" style="background: var(--color-surface); border: 1px solid var(--color-border); color: #f59e0b;">
               <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
               <svg class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
           </button>
@@ -294,43 +303,43 @@ html.dark select option {
       </div>
 
       <!-- LOGIN SCREEN -->
-      <div id="login-box" class="absolute inset-0 flex items-center justify-center p-4 z-40 overflow-hidden" style="background:linear-gradient(135deg,#0d1117 0%,#0f172a 50%,#0d1117 100%);">
-          <div class="absolute pointer-events-none" style="width:500px;height:500px;top:-100px;left:-150px;background:radial-gradient(circle,rgba(99,102,241,0.12) 0%,transparent 65%);"></div>
-          <div class="absolute pointer-events-none" style="width:400px;height:400px;bottom:-80px;right:-100px;background:radial-gradient(circle,rgba(139,92,246,0.1) 0%,transparent 65%);"></div>
+      <div id="login-box" class="absolute inset-0 flex items-center justify-center p-4 z-40 overflow-hidden" style="background: linear-gradient(135deg, var(--color-bg) 0%, var(--color-bg-alt) 50%, var(--color-bg) 100%);">
+          <div class="absolute pointer-events-none rounded-full" style="width:500px;height:500px;top:-100px;left:-150px;background:radial-gradient(circle, var(--color-primary) 0%, transparent 65%); opacity: 0.12;"></div>
+          <div class="absolute pointer-events-none rounded-full" style="width:400px;height:400px;bottom:-80px;right:-100px;background:radial-gradient(circle, var(--color-primary) 0%, transparent 65%); opacity: 0.1;"></div>
           <div class="relative w-full max-w-sm">
               
               <div class="text-center mb-8">
                   <div class="relative inline-flex items-center justify-center mb-5">
-                      <div class="lock-pulse relative w-20 h-20 rounded-3xl flex items-center justify-center" style="background:linear-gradient(145deg,rgba(99,102,241,0.25),rgba(99,102,241,0.08));border:1px solid rgba(99,102,241,0.45);box-shadow:0 0 40px rgba(99,102,241,0.25),inset 0 1px 0 rgba(255,255,255,0.08);">
-                          <svg class="w-9 h-9" style="color:#a5b4fc" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                      <div class="lock-pulse relative w-20 h-20 rounded-3xl flex items-center justify-center" style="background: linear-gradient(145deg, color-mix(in srgb, var(--color-primary) 25%, transparent), color-mix(in srgb, var(--color-primary) 8%, transparent)); border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--color-primary) 25%, transparent), inset 0 1px 0 rgba(255,255,255,0.08);">
+                          <svg class="w-9 h-9 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                       </div>
                   </div>
-                  <h2 class="text-3xl font-black" style="color:#f1f5f9;" data-i18n="title">Nahan Gateway</h2>
-                  <p class="text-sm mt-2" style="color:#64748b;">Sign in to manage your gateway</p>
+                  <h2 class="text-3xl font-black" style="color: var(--color-text);" data-i18n="title">Nahan Gateway</h2>
+                  <p class="text-sm mt-2" style="color: var(--color-text-muted);">Sign in to manage your gateway</p>
               </div>
-              <div class="rounded-3xl p-px" style="background:linear-gradient(145deg,rgba(99,102,241,0.45),rgba(99,102,241,0.08) 50%,rgba(139,92,246,0.3));box-shadow:0 25px 60px rgba(0,0,0,0.5);">
-                  <div class="rounded-3xl p-8" style="background:linear-gradient(145deg,rgba(15,20,40,0.98),rgba(13,17,23,0.98));">
-                      <div class="flex items-center gap-2 mb-7 pb-6" style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <div class="rounded-3xl p-px" style="background: linear-gradient(145deg, color-mix(in srgb, var(--color-primary) 45%, transparent), color-mix(in srgb, var(--color-primary) 8%, transparent) 50%, color-mix(in srgb, var(--color-primary) 30%, transparent)); box-shadow: 0 25px 60px rgba(0,0,0,0.15);">
+                  <div class="rounded-3xl p-8" style="background: var(--color-surface);">
+                      <div class="flex items-center gap-2 mb-7 pb-6" style="border-bottom: 1px solid var(--color-border);">
                           <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#22c55e;box-shadow:0 0 8px #22c55e;"></span>
-                          <span class="text-xs" style="color:#4ade80;">System online</span>
+                          <span class="text-xs text-emerald-500 font-semibold" data-i18n="system_online">System online</span>
                           <span class="flex-1"></span>
-                          <span class="text-xs" style="color:#334155;">🔒 Secure connection</span>
+                          <span class="text-xs" style="color: var(--color-text-muted); opacity: 0.8;">🔒 Secure connection</span>
                       </div>
                       __HAS_DB_WARNING__
                       <div class="mb-5">
-                          <label class="block text-sm font-semibold mb-2.5" style="color:#94a3b8;" data-i18n="login_password">Password</label>
+                          <label class="block text-sm font-semibold mb-2.5" style="color: var(--color-text-muted);" data-i18n="login_password">Password</label>
                           <div class="relative">
-                              <div class="absolute inset-y-0 start-0 flex items-center ps-4" style="color:rgba(99,102,241,0.7);">
+                              <div class="absolute inset-y-0 start-0 flex items-center ps-4 text-primary">
                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
                               </div>
-                              <input type="password" id="pwd" data-i18n="pass_ph" placeholder="Enter your password" class="login-input w-full ps-11 pe-12 py-3.5 text-sm rounded-2xl outline-none transition-all" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;">
-                              <button type="button" onclick="const n=document.getElementById('pwd');n.type=n.type==='password'?'text':'password'" class="eye-btn absolute inset-y-0 end-0 flex items-center px-4 transition-colors" style="color:rgba(99,102,241,0.5);">
+                              <input type="password" id="pwd" data-i18n="pass_ph" placeholder="Enter your password" class="login-input w-full ps-11 pe-12 py-3.5 text-sm rounded-2xl outline-none transition-all">
+                              <button type="button" onclick="const n=document.getElementById('pwd');n.type=n.type==='password'?'text':'password'" class="eye-btn absolute inset-y-0 end-0 flex items-center px-4 transition-colors" style="color: var(--color-primary); opacity: 0.6;">
                                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                               </button>
                           </div>
                       </div>
                       <p id="err-msg" class="hidden text-sm mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;"><span>⚠️</span><span data-i18n="err_pass">Wrong password, please try again.</span></p>
-                      <button onclick="doLogin()" class="login-btn btn-shimmer w-full py-3.5 rounded-2xl font-bold text-sm relative overflow-hidden transition-all" style="background:linear-gradient(135deg,#6366f1,#7c3aed);color:white;box-shadow:0 4px 24px rgba(99,102,241,0.4),inset 0 1px 0 rgba(255,255,255,0.1);" data-i18n="login_btn">
+                      <button onclick="doLogin()" class="login-btn btn-shimmer w-full py-3.5 rounded-2xl font-bold text-sm relative overflow-hidden transition-all" style="background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 80%, black)); color: white; box-shadow: 0 4px 24px color-mix(in srgb, var(--color-primary) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.1);" data-i18n="login_btn">
                           Sign In
                       </button>
                   </div>
@@ -1826,7 +1835,7 @@ proxyip.cmliussss.net" class="w-full px-4 py-3 rounded-xl border border-slate-20
           const CURRENT_VERSION = "__CURRENT_VERSION__";
           const i18n = {
               en: {
-                  title: "Nahan Gateway", pass_ph: "Master Key", login_btn: "Authenticate", err_pass: "Access Denied", missing_db: "⚠️ IOT_DB namespace missing! Settings won't save.",
+                  title: "Nahan Gateway", pass_ph: "Master Key", login_btn: "Authenticate", err_pass: "Access Denied", missing_db: "⚠️ IOT_DB namespace missing! Settings won't save.", system_online: "System online",
                   logout: "Disconnect", tab_overview: "Dashboard", tab_info: "Endpoints", tab_status: "Metrics", tab_settings: "System", tab_adv: "Advanced", tab_logs: "Logs", tab_help: "Help & FAQ",
                   qr_title: "Direct Stream Link", badge_multi: "Dual-Core Multiplexed", copy: "Copy", copied: "Copied to clipboard!", sync_link: "Cloud Sync URL", active_id: "Hardware ID",
                   stat_ip: "Origin IP", stat_dc: "Edge Node", stat_loc: "Data Region",
@@ -1918,7 +1927,7 @@ proxyip.cmliussss.net" class="w-full px-4 py-3 rounded-xl border border-slate-20
                     html_desc_strategy: "<details><summary class='cursor-pointer text-primary'>View supported placeholders...</summary><div class='mt-2'>Supported placeholders: <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{FLAG}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{COUNTRY}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{CITY}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{ISP}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{PROTOCOL}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{USER}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{PORT}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{PREFIX}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{IP}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{IP_NAME}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{HOST}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{DATE}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{INDEX}</code>, <code class='bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded text-rose-500 font-mono'>{WORKER}</code>.<br><span class='text-[10px] text-slate-400 dark:text-slate-500 leading-snug'>• <b>{FLAG}</b>: Country flag emoji (e.g. 🇺🇸).<br>• <b>{COUNTRY}</b>: Country name.<br>• <b>{CITY}</b>: City name.<br>• <b>{ISP}</b>: ISP / ASN org.<br>• <b>{PROTOCOL}</b>: Core mode (VLESS / Trojan).<br>• <b>{USER}</b>: Subscriber name.<br>• <b>{PORT}</b>: Active port.<br>• <b>{PREFIX}</b>: Custom prefix.<br>• <b>{IP}</b>: Clean IP address.<br>• <b>{IP_NAME}</b>: Clean IP name.<br>• <b>{HOST}</b>: Hostname.<br>• <b>{DATE}</b>: Current date.<br>• <b>{INDEX}</b>: Config index.<br>• <b>{WORKER}</b>: Worker name.</span><br>Pre-defined strategies: <code>default</code>, <code>type-user-port</code>, <code>user-port</code>, <code>host-port-user</code>, <code>prefix-user-port</code>, <code>ip</code>.</div></details>",
                },
               fa: {
-                  title: "دروازه نهان", pass_ph: "کلید اصلی", login_btn: "ورود به سیستم", err_pass: "دسترسی مسدود شد", missing_db: "⚠️ فضای پایگاه داده یافت نشد! تنظیمات ذخیره نمی‌شوند.",
+                  title: "دروازه نهان", pass_ph: "کلید اصلی", login_btn: "ورود به سیستم", err_pass: "دسترسی مسدود شد", missing_db: "⚠️ فضای پایگاه داده یافت نشد! تنظیمات ذخیره نمی‌شوند.", system_online: "سیستم فعال است",
                   logout: "خروج", tab_overview: "نمای کلی", tab_info: "نودها", tab_status: "شبکه", tab_settings: "تنظیمات", tab_adv: "پیشرفته", tab_logs: "گزارش فعالیت", tab_help: "راهنما و سوالات",
                   qr_title: "لینک اتصال مستقیم", badge_multi: "ترکیب ترانزیت پیشرفته دوگانه", copy: "کپی", copied: "در حافظه کپی شد!", sync_link: "لینک ساب (همگام سازی ابری)", active_id: "شناسه سخت‌افزار",
                   stat_ip: "آی‌پی مبدا", stat_dc: "گره لبه", stat_loc: "منطقه داده",
