@@ -3159,12 +3159,13 @@ proxyip.cmliussss.net" class="w-full px-4 py-3 rounded-xl border border-slate-20
 
           async function doSave() {
               const el = id => document.getElementById(id);
+              const prevApiRoute = (window.nahanConfig && window.nahanConfig.apiRoute) || baseRoute.replace(/^\//, '');
               const payload = {
                   key: sessionKey,
                   config: {
                       mode: el('cfg-proto').value, socketPorts: Array.from(el('cfg-port').selectedOptions).map(o=>o.value).join(','), deviceId: el('cfg-uuid').value,
                       apiRoute: el('cfg-path').value, masterKey: el('cfg-pass').value, agent: el('cfg-fp').value,
-                      resolveIp: el('cfg-dns').value, customDns: el('cfg-custom-dns').value ? el('cfg-custom-dns').value : 'https://cloudflare-dns.com/dns-query', cleanIps: el('cfg-ips').value, maintenanceHost: el('cfg-fake') ? el('cfg-fake').value : '', backupRelay: el('cfg-relay').value, customRouting: el('cfg-custom-routing') ? el('cfg-custom-routing').value : '',  nat64Prefix: el('cfg-nat64') ? el('cfg-nat64').value : '', enableDirectConfigs: el('cfg-direct-configs') ? el('cfg-direct-configs').checked : false, syncApiKey: el('cfg-sync-api-key') ? el('cfg-sync-api-key').value.trim() : '', autoUpdate: el('cfg-auto-update') ? el('cfg-auto-update').checked : false, autoUpdateFormat: document.querySelector('input[name="auto-update-format"]:checked')?.value || 'normal',
+                      resolveIp: el('cfg-dns').value, customDns: el('cfg-custom-dns').value ? el('cfg-custom-dns').value : 'https://cloudflare-dns.com/dns-query', cleanIps: el('cfg-ips').value, maintenanceHost: el('cfg-fake') ? el('cfg-fake').value : '', backupRelay: el('cfg-relay').value, customRouting: el('cfg-custom-routing') ? el('cfg-custom-routing').value : '',  nat64Prefix: el('cfg-nat64') ? el('cfg-nat64').value : '', enableDirectConfigs: el('cfg-direct-configs') ? el('cfg-direct-configs').checked : false, syncApiKey: el('cf...ey') ? el('cfg-sync-api-key').value.trim() : '', autoUpdate: el('cfg-auto-update') ? el('cfg-auto-update').checked : false, autoUpdateFormat: document.querySelector('input[name="auto-update-format"]:checked')?.value || 'normal',
                       enableOpt1: el('cfg-tfo').checked, enableOpt2: el('cfg-ech').checked,
                       tgToken: el('cfg-tg-token').value, tgChatId: el('cfg-tg-chat').value, tgAdminId: el('cfg-tg-admin').value,
                       cfAccountId: el('cfg-cf-acc').value, cfApiToken: el('cfg-cf-token').value,
@@ -3214,7 +3215,19 @@ proxyip.cmliussss.net" class="w-full px-4 py-3 rounded-xl border border-slate-20
                               }).then(r => { if (!r.ok) console.error('Sync to ' + h + ' failed: HTTP ' + r.status); }).catch(e => { console.error('Sync to ' + h + ' error:', e.message); });
                           });
                       }
-                      setTimeout(() => window.location.href = '/' + data.newRoute + '/dash', 1000);
+                      // Update local config with saved values
+                      Object.assign(window.nahanConfig, payload.config);
+                      const newApiRoute = data.newRoute || payload.config.apiRoute;
+                      if (newApiRoute && newApiRoute !== prevApiRoute) {
+                          // API route changed — must redirect to new URL
+                          baseRoute = '/' + newApiRoute;
+                          setTimeout(() => { window.location.href = '/' + newApiRoute + '/dash'; }, 1000);
+                      } else {
+                          // Same route — just refresh data silently, no reload
+                          baseRoute = '/' + (newApiRoute || prevApiRoute);
+                          doLogin(true);
+                          setTimeout(() => { stat.textContent = ''; }, 2500);
+                      }
                   } else { stat.textContent = i18n[lang].msg_err; stat.className = "text-sm font-bold text-red-500 md:me-4"; }
               } catch(e) { stat.textContent = i18n[lang].msg_err; stat.className = "text-sm font-bold text-red-500 md:me-4"; }
           }
@@ -4013,7 +4026,7 @@ function buildPortCheckboxes(wrapId, selectedPorts) {
                   });
                   if(res.ok) {
                        const stat = document.getElementById('save-status');
-                       stat.textContent = "Saved. Refreshing...";
+                       stat.textContent = "Saved!";
                        setTimeout(() => { doLogin(true); stat.textContent = ""; }, 1000);
                   }
               } catch(e) {}
